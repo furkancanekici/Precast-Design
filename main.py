@@ -65,8 +65,16 @@ def load_data():
         df_k = pd.read_excel(os.path.join(path, "kolkat.xlsx"))
         cols = ['b (mm)', 'h (mm)', 'onrete lass', 'Donatı Oranı (%)', 'Ag (mm²)', 'As (mm²)', 'I (mm⁴)', 'Ec (MPa)']
         data_store['unique_kesitler'] = df_k[cols].drop_duplicates().reset_index(drop=True)
-        
-        data_store['model'] = joblib.load(os.path.join(path, "kolon_oneri_modeli_rf_sample.joblib"))
+
+        data_store['model'] = None
+        model_path = os.path.join(path, "kolon_oneri_modeli_rf_sample.joblib")
+        if os.path.exists(model_path):
+            try:
+                data_store['model'] = joblib.load(model_path)
+            except Exception as e:
+                print(f"⚠️ Model yüklenemedi: {e}")
+        else:
+            print("⚠️ Model dosyası bulunamadı. API öneri üretmek için modele ihtiyaç duyar.")
         
         try:
             df_c = pd.read_excel(os.path.join(path, "il_ilce_koordinatlari_duzenlenmis.xlsx"))
@@ -153,6 +161,8 @@ def _hesapla_kolon_internal(il, zemin, yuk, boy, fiyatlar):
 @app.post("/hesapla", response_model=CiktiModelKolon)
 async def hesapla_tekil(girdi: GirdiModelKolon):
     try:
+        if data_store.get('model') is None:
+            return CiktiModelKolon(mesaj="Model dosyası yüklenemedi. Lütfen model dosyasını sunucuya ekleyin.")
         Ss, S1, SDs, SD1, df = _hesapla_kolon_internal(girdi.il, girdi.zemin_sinifi, girdi.cati_kilo, girdi.istenen_uzunluk_metre, girdi.fiyatlar)
         lat, lon = None, None
         if data_store['df_coords'] is not None:
@@ -171,6 +181,8 @@ async def hesapla_tekil(girdi: GirdiModelKolon):
 @app.post("/hesapla-sistem", response_model=CiktiModelSistem)
 async def hesapla_sistem(girdi: GirdiModelSistem):
     try:
+        if data_store.get('model') is None:
+            return CiktiModelSistem(mesaj="Model dosyası yüklenemedi. Lütfen model dosyasını sunucuya ekleyin.")
         df_k = data_store['kiris_katalogu'].copy()
         L = girdi.kiris_acikligi_m; limit = (L*1000)/200
         Ec = 30000 * 1000; rho = 25
